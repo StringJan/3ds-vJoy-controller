@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+import signal
+import sys
 
 # Thread aus liste entfernen wenn ende
 
@@ -44,6 +46,7 @@ class ClientThread(threading.Thread):
         self.status = status
         self.offsetB = offsetB
         self.offsetA = offsetA
+        self.running = True
         print("[+] New thread started for " + ip + ":" + str(port))
 
     def run(self):
@@ -53,7 +56,7 @@ class ClientThread(threading.Thread):
 
         data = "not empty"
 
-        while len(data):
+        while len(data) & self.running:
             data = self.socket.recv(2048)
             split = data.split(b";")
             buttons = int(split[0])
@@ -63,8 +66,8 @@ class ClientThread(threading.Thread):
             j.data.lButtons = j.data.lButtons & ~((pow(2, buttonsPerClient) - 1) << self.offsetB)  # reset
             j.data.lButtons = j.data.lButtons | (buttons << self.offsetB)  # set
 
-            for i in range(1, axisPerClient+1):
-                setAxis(i+self.offsetA, int(split[i]))
+            for i in range(1, axisPerClient + 1):
+                setAxis(i + self.offsetA, int(split[i]))
             j.update()
             self.socket.send(b"Server received : " + data)
 
@@ -81,13 +84,28 @@ tcpsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 tcpsock.bind((host, port))
 threads = []
 
-while True:
-    tcpsock.listen(4)
-    print("\nListening for incoming connections...")
-    (clientsock, (ip, port)) = tcpsock.accept()
-    newthread = ClientThread(ip, port, clientsock, False, len(threads)*buttonsPerClient, len(threads)*axisPerClient)
-    newthread.start()
-    threads.append(newthread)
 
-for t in threads:
-    t.join()
+def signal_handler(signal, frame):
+    print("\nShutting down server...")
+    for thread in threads:
+        thread.running = False
+        thread.join()
+    tcpsock.close()
+    sys.exit(0)
+
+
+signal.signal(signal.SIGINT, signal_handler)
+
+tcpsock.settimeout(3)
+
+print("\nListening for incoming connections...")
+while True:
+    try:
+        tcpsock.listen(4)
+        (clientsock, (ip, port)) = tcpsock.accept()
+        newthread = ClientThread(ip, port, clientsock, False, len(threads) * buttonsPerClient,
+                                 len(threads) * axisPerClient)
+        newthread.start()
+        threads.append(newthread)
+    except socket.timeout:
+        pass

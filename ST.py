@@ -1,12 +1,12 @@
 #!/usr/bin/env python
-import signal
-import sys
 
 # Thread aus liste entfernen wenn ende
 
 import pyvjoy
 import socket
 import threading
+import time
+import re
 
 buttonsPerClient = 3
 axisPerClient = 2
@@ -46,7 +46,6 @@ class ClientThread(threading.Thread):
         self.status = status
         self.offsetB = offsetB
         self.offsetA = offsetA
-        self.running = True
         print("[+] New thread started for " + ip + ":" + str(port))
 
     def run(self):
@@ -55,27 +54,51 @@ class ClientThread(threading.Thread):
         self.socket.send(b"\nWelcome to the server\n\n")
 
         data = "not empty"
+        leftover = ""
+        pattern = r'^<\d+;\s*\d+;\s*\d+>'
 
-        while len(data) & self.running:
-            data = self.socket.recv(2048)
-            split = data.split(b";")
+        while len(data):
+            print("Waiting for data")
+            data = self.socket.recv(25).decode("utf-8")
+            print("Client sent:" + str(data))
+            data = leftover + data
+            print("Concatenated:" + str(data))
+            matches = re.findall(pattern, str(data))
+            packet = ""
+            if len(matches) > 0:
+                packet = matches[0]
+                print("Packet:" + str(packet))
+
+            leftover = data.replace(packet, "")
+            print("Leftover: " + str(leftover))
+            if packet == "":
+                print("No full packet received")
+                continue
+            curr_pack = packet.rstrip(">").lstrip("<")
+            print("Current packet:" + curr_pack)
+            try:
+                split = curr_pack.split(";")
+            except:
+                print("Split Error")
+            print("Processed:" + str(split))
             buttons = int(split[0])
             if buttons >= pow(2, buttonsPerClient):
                 continue
-            print("Client sent : " + str(data))
             j.data.lButtons = j.data.lButtons & ~((pow(2, buttonsPerClient) - 1) << self.offsetB)  # reset
             j.data.lButtons = j.data.lButtons | (buttons << self.offsetB)  # set
 
-            for i in range(1, axisPerClient + 1):
-                setAxis(i + self.offsetA, int(split[i]))
+            for i in range(1, axisPerClient+1):
+                setAxis(i+self.offsetA, int(split[i]))
             j.update()
-            self.socket.send(b"Server received : " + data)
+            time.sleep(0.1)
+            self.socket.send(b"Ack")
+            print("Sent Ack")
 
         print("Client disconnected...")
         threads.remove(self)
 
 
-host = "127.0.0.1"
+host = "0.0.0.0"
 port = 9999
 
 tcpsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -84,28 +107,13 @@ tcpsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 tcpsock.bind((host, port))
 threads = []
 
-
-def signal_handler(signal, frame):
-    print("\nShutting down server...")
-    for thread in threads:
-        thread.running = False
-        thread.join()
-    tcpsock.close()
-    sys.exit(0)
-
-
-signal.signal(signal.SIGINT, signal_handler)
-
-tcpsock.settimeout(3)
-
-print("\nListening for incoming connections...")
 while True:
-    try:
-        tcpsock.listen(4)
-        (clientsock, (ip, port)) = tcpsock.accept()
-        newthread = ClientThread(ip, port, clientsock, False, len(threads) * buttonsPerClient,
-                                 len(threads) * axisPerClient)
-        newthread.start()
-        threads.append(newthread)
-    except socket.timeout:
-        pass
+    tcpsock.listen(4)
+    print("\nListening for incoming connections...")
+    (clientsock, (ip, port)) = tcpsock.accept()
+    newthread = ClientThread(ip, port, clientsock, False, len(threads)*buttonsPerClient, len(threads)*axisPerClient)
+    newthread.start()
+    threads.append(newthread)
+
+for t in threads:
+    t.join()

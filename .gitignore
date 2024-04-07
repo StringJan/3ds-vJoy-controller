@@ -3,3 +3,8 @@
 *.xml
 *.iml
 Test.py
+
+3ds/build/**
+*.3dsx
+*.elf
+*.smdh

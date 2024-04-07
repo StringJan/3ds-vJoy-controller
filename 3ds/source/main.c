@@ -21,6 +21,7 @@
 
 static u32 *SOC_buffer = NULL;
 s32 sock = -1, csock = -1;
+static char address[60];
 
 __attribute__((format(printf,1,2)))
 void failExit(const char *fmt, ...);
@@ -45,13 +46,49 @@ void socShutdown() {
 
 }
 
-void buttonsToString(u32 keys, char* buttons) {
+void getAddressText(SwkbdState swkbd) {
+	swkbdInit(&swkbd, SWKBD_TYPE_WESTERN, 2, -1);
+			swkbdSetValidation(&swkbd, SWKBD_NOTEMPTY_NOTBLANK, 0, 0);
+			swkbdSetFeatures(&swkbd, SWKBD_DARKEN_TOP_SCREEN | SWKBD_ALLOW_HOME | SWKBD_ALLOW_RESET | SWKBD_ALLOW_POWER);
+			swkbdSetHintText(&swkbd, "Enter the server IP");
+			// swkbdSetFilterCallback(&swkbd, MyCallback, NULL);
+			SwkbdButton button = SWKBD_BUTTON_NONE;
+			bool shouldQuit = false;
+			do
+			{
+				swkbdSetInitialText(&swkbd, "");
+				button = swkbdInputText(&swkbd, address, sizeof(address));
+				if (button != SWKBD_BUTTON_NONE)
+					break;
+
+				SwkbdResult res = swkbdGetResult(&swkbd);
+				if (res == SWKBD_RESETPRESSED)
+				{
+					shouldQuit = true;
+					aptSetChainloaderToSelf();
+					break;
+				}
+				else if (res != SWKBD_HOMEPRESSED && res != SWKBD_POWERPRESSED) {
+					failExit("Error on input\n");
+				}
+
+				shouldQuit = !aptMainLoop();
+			} while (!shouldQuit);
+}
+
+int map_range(int value, int from_min, int from_max, int to_min, int to_max) {
+	return (value - from_min) * (to_max - to_min) / (from_max - from_min) + to_min;
+}
+
+void buttonsToString(u32 keys, circlePosition pos, char* buttons) {
 	int keysFormatted = 0;
 	if (keys & KEY_A) keysFormatted = (1<<0) | keysFormatted;
 	if (keys & KEY_B) keysFormatted = (1<<1) | keysFormatted;
 	if (keys & KEY_X) keysFormatted = (1<<2) | keysFormatted;
 	if (keys & KEY_Y) keysFormatted = (1<<3) | keysFormatted;
-	sprintf(buttons, "<%d; 32768; 32768>", keysFormatted);
+	int scaledX = map_range(pos.dx, -160, 160, 0, 32768);
+	int scaledY = map_range(pos.dy, -160, 160, 0, 32768);
+	sprintf(buttons, "<%d; %d; %d>", keysFormatted, scaledX, scaledY);
 }
 
 //---------------------------------------------------------------------------------
@@ -63,6 +100,8 @@ int main(int argc, char **argv) {
 	char temp[1026];
 
 	char buttons[32];
+
+	static SwkbdState swkbd;
 
 	gfxInitDefault();
 
@@ -105,13 +144,9 @@ int main(int argc, char **argv) {
 	client.sin_family = AF_INET;
 	client.sin_port = htons (9999);
 
-	// if ( (ret = listen( sock, 5)) ) {
-	// 	failExit("listen: %d %s\n", errno, strerror(errno));
-	// }
-
-	// Convert IPv4 and IPv6 addresses from text to binary
-    // form
-    if (inet_pton(AF_INET, "192.168.1.147", &client.sin_addr)
+	getAddressText(swkbd);
+	printf("Address: %s\n", address);
+    if (inet_pton(AF_INET, address, &client.sin_addr)
         <= 0) {
         failExit("\nInvalid address/ Address not supported\n");
     }
@@ -138,10 +173,12 @@ int main(int argc, char **argv) {
 		fcntl(sock, F_SETFL, fcntl(sock, F_GETFL, 0) & ~O_NONBLOCK);
 		gspWaitForVBlank();
 		hidScanInput();
+		circlePosition pos;
+		hidCircleRead(&pos);
 		u32 keys = hidKeysDown() | hidKeysHeld();
 		if (keys & KEY_START) break;
 		printf("%ld\n", keys);
-		buttonsToString(keys, buttons);
+		buttonsToString(keys, pos, buttons);
 		// set client socket to blocking to simplify sending data back
 		fcntl(sock, F_SETFL, fcntl(sock, F_GETFL, 0) & ~O_NONBLOCK);
 		//memset (temp, 0, 1026);

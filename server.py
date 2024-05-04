@@ -85,7 +85,7 @@ class ClientThread(threading.Thread):
                 print("Split Error")
             print("Processed:" + str(split))
             buttons = int(split[0])
-            if buttons >= pow(2, buttonsPerClient):
+            if buttons > pow(2, buttonsPerClient):
                 continue
             j.data.lButtons = j.data.lButtons & ~((pow(2, buttonsPerClient) - 1) << self.offsetB)  # reset
             j.data.lButtons = j.data.lButtons | (buttons << self.offsetB)  # set
@@ -94,8 +94,6 @@ class ClientThread(threading.Thread):
                 setAxis(i+self.offsetA, int(split[i]))
             j.update()
             time.sleep(0.1)
-            self.socket.send(b"Ack")
-            print("Sent Ack")
 
         print("Client disconnected...")
         threads.remove(self)

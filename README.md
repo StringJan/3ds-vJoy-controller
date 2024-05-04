@@ -1,8 +1,10 @@
 # 3DS vJoy Controller
 This project allows anybody with one (or more) 3DS and vJoy to use their device(s) as a singular, coherent controller.
-When a 3DS joins the server (running on the system where the button inputs are wanted), it will be assigned the next available buttons on the virtual controller and update those depending on which buttons are pressed on the 3DS.
+When a 3DS joins the server (running on the system where the button inputs are wanted), it will be assigned the next available buttons and axes on the virtual controller and update those depending on which buttons are pressed on the 3DS.
 
-Focus of the project is the simple protocol and the extensibility for different devices.
+Focus of the project is the simple protocol and the extensibility for different devices. Number of buttons and axes can be dynamic, depending on which device class is preferred.
+
+Also the OS-native input-methods of the 3DS were used for the 3DS implementation of the protocol.
 
 For educational purposes only.
 # Requirements

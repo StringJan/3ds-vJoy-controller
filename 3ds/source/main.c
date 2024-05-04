@@ -176,7 +176,10 @@ int main(int argc, char **argv) {
 		circlePosition pos;
 		hidCircleRead(&pos);
 		u32 keys = hidKeysDown() | hidKeysHeld();
-		if (keys & KEY_START) break;
+		if (keys & KEY_START) {
+			send(sock, "d", strlen("d"), 0);
+			break;
+		};
 		printf("%ld\n", keys);
 		buttonsToString(keys, pos, buttons);
 		// set client socket to blocking to simplify sending data back

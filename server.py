@@ -57,12 +57,15 @@ class ClientThread(threading.Thread):
         leftover = ""
         pattern = r'^<\d+;\s*\d+;\s*\d+>'
 
-        while len(data):
+        while True:
             print("Waiting for data")
             data = self.socket.recv(25).decode("utf-8")
             print("Client sent:" + str(data))
             data = leftover + data
             print("Concatenated:" + str(data))
+            # Check if packet contains d
+            if "d" in data:
+                break
             matches = re.findall(pattern, str(data))
             packet = ""
             if len(matches) > 0:
@@ -108,12 +111,9 @@ tcpsock.bind((host, port))
 threads = []
 
 while True:
-    tcpsock.listen(4)
+    tcpsock.listen()
     print("\nListening for incoming connections...")
     (clientsock, (ip, port)) = tcpsock.accept()
     newthread = ClientThread(ip, port, clientsock, False, len(threads)*buttonsPerClient, len(threads)*axisPerClient)
     newthread.start()
     threads.append(newthread)
-
-for t in threads:
-    t.join()
